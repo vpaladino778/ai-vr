@@ -1,11 +1,10 @@
 # GPU dependencies for RunPod (RTX 4090 / CUDA 11.8)
 #
-# Base image runpod/pytorch:2.0.1-py3.10-cuda11.8.0-dkms-ubuntu22.04 already
-# provides torch==2.0.1+cu118 and torchvision==0.15.2+cu118, so we don't
-# reinstall them here — doing so would downgrade to the CPU wheel.
+# Base image runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04 already
+# provides torch==2.1.0+cu118 and torchvision, so we don't reinstall them here.
 #
-# StereoCrafter requires these exact versions (tested against torch 2.0.1):
-xformers==0.0.20
+# xformers 0.0.22.post7 is the correct build for torch 2.1.0 + CUDA 11.8:
+xformers==0.0.22.post7
 diffusers==0.29.2
 transformers==4.42.3
 accelerate==1.0.1

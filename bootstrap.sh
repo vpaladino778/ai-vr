@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bootstrap script for RunPod pods.
 #
-# Base image: runpod/pytorch:2.0.1-py3.10-cuda11.8.0-dkms-ubuntu22.04
-# (torch 2.0.1 + CUDA 11.8 are pre-installed — this script adds everything else)
+# Base image: runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+# (torch 2.1.0 + CUDA 11.8 are pre-installed — this script adds everything else)
 #
 # Usage (first time on a fresh pod):
 #   cd /workspace && git clone <your-repo-url> ai-video-generation
@@ -28,8 +28,11 @@ echo "=== [3/5] Python dependencies ==="
 pip install --upgrade pip
 pip install -r "$REPO_ROOT/requirements-gpu.txt"
 
-# StereoCrafter has its own requirements (some may overlap — pip deduplicates)
-pip install -r "$REPO_ROOT/deps/StereoCrafter/requirements.txt"
+# StereoCrafter's requirements.txt pins torch==2.0.1 which would downgrade the
+# base image's torch 2.1.0. Strip torch/torchvision lines before installing.
+grep -v -E "^torch(vision)?[>=<! ]|^torch(vision)?$" \
+    "$REPO_ROOT/deps/StereoCrafter/requirements.txt" \
+    | pip install -r /dev/stdin
 
 echo "=== [4/5] Build Forward-Warp CUDA extension ==="
 cd "$REPO_ROOT/deps/StereoCrafter/dependency/Forward-Warp"
