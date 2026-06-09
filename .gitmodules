@@ -1,0 +1,3 @@
+[submodule "deps/StereoCrafter"]
+	path = deps/StereoCrafter
+	url = https://github.com/TencentARC/StereoCrafter
