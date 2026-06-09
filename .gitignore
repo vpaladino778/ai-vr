@@ -1,0 +1,30 @@
+# Generated pipeline artifacts — never commit these
+frames/
+stereo/
+compose/
+output/
+saved_prompts/
+# Model weights — stored in RunPod persistent volume (/workspace/models) or local models/
+models/
+
+# Source videos — user-supplied, not repo content
+source/*.mp4
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config overrides (user-specific paths, keys, etc.)
+configs/*.local.yaml

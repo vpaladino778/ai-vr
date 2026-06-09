@@ -1,0 +1,74 @@
+# VR180 pipeline configuration
+
+paths:
+  source_video: "source/source_video.mp4"
+  rgb_frames: "frames/rgb"
+  alpha_frames: "frames/alpha"
+  depth_frames: "frames/depth"
+  person_depth_frames: "frames/person_depth"
+  left_rgba: "stereo/left_rgba"
+  right_rgba: "stereo/right_rgba"
+  sbs_frames: "compose/sbs_frames"
+  output_video: "output/vr180_person_sbs.mp4"
+
+# Model weights directory.
+# RunPod: /workspace/models (persistent volume, survives pod restarts).
+# Local:  ./models (relative to project root, gitignored).
+weights_dir: "/workspace/models"
+
+# Frame numbering used consistently across every stage: 000001.png, 000002.png, ...
+frame_pattern: "%06d.png"
+
+# --- Stage 6: Compose into VR180 SBS frames ---
+canvas_size: 1920
+final_width: 3840
+final_height: 1920
+
+# Angular placement
+virtual_fov_v_deg: 60
+virtual_center_elevation_deg: -15
+virtual_center_azimuth_deg: 0.0
+
+background_color:
+  r: 0
+  g: 0
+  b: 0
+
+# --- Stage 5 (CPU path): depth-warp stereo ---
+max_disparity_px: 26
+
+# --- Stage 5 (GPU path): StereoCrafter ---
+# max_disp maps to StereoCrafter's --max_disp argument (disparity in pixels).
+stereocrafter_max_disp: 20
+# tile_num: 1 = full frame (720p on 24GB VRAM). Use 2 for 1080p if OOM.
+stereocrafter_tile_num: 1
+# frames_chunk: frames processed per diffusion pass (default 23, reduce if OOM).
+stereocrafter_frames_chunk: 23
+
+# --- Alpha matte cleanup (stages 2 and 5) ---
+alpha_dilate_px: 2
+alpha_blur_radius: 1.5
+
+# --- Stage 3/4: Depth cleanup (CPU path only) ---
+depth_clamp_percentile_low: 1.0
+depth_clamp_percentile_high: 99.0
+depth_spatial_smooth_sigma_color: 0.05
+depth_spatial_smooth_sigma_space: 9.0
+depth_temporal_smooth_alpha: 0.4
+
+# --- Stage 2: Matting (RVM) ---
+matting_downsample_ratio: 0.4
+
+# --- Stage 7: Encoding ---
+encode_mode: "crf"
+encode_crf: 18
+encode_bitrate: "45M"
+encode_maxrate: "60M"
+encode_bufsize: "120M"
+
+# ffmpeg/ffprobe binary paths.
+# Leave unset (or as "ffmpeg"/"ffprobe") to use whatever is on PATH.
+# Set absolute paths here only if needed for local Windows installs where
+# the winget-installed binary isn't on PATH for your current shell.
+# ffmpeg_bin: "ffmpeg"
+# ffprobe_bin: "ffprobe"
