@@ -44,7 +44,17 @@ def is_downloaded(dest: Path) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="Download StereoCrafter model weights")
     parser.add_argument("--dest", default=None, help="Destination directory for weights")
+    parser.add_argument(
+        "--svd-repo",
+        default=None,
+        help="Override SVD repo ID (e.g. a non-gated community mirror). "
+             "Default: stabilityai/stable-video-diffusion-img2vid-xt-1-1",
+    )
     args = parser.parse_args()
+
+    if args.svd_repo:
+        MODELS[0]["repo_id"] = args.svd_repo
+        log.info(f"SVD repo override: {args.svd_repo}")
 
     try:
         from huggingface_hub import snapshot_download
@@ -66,7 +76,6 @@ def main():
         snapshot_download(
             repo_id=model["repo_id"],
             local_dir=str(dest),
-            local_dir_use_symlinks=False,
         )
         log.info(f"  -> {dest}")
 

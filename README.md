@@ -1,67 +1,137 @@
 # AI Video → VR180
 
-Converts a 2D AI-generated person video into a stereoscopic VR180 MP4 playable on a Meta Quest headset.
+Converts a 2D AI-generated person video into a stereoscopic VR180 MP4 playable on a Meta Quest headset via DeoVR.
 
-## Output
+**Output:** `output/vr180_person_sbs.mp4` — 3840×1920 HEVC, 180° SBS stereo.
+**Playback:** DeoVR → projection: 180° SBS, stereo: Left/Right.
 
-`output/vr180_person_sbs.mp4` — 3840×1920 HEVC, side-by-side stereo, 180° half-equirectangular. Play in DeoVR or Skybox VR with projection set to **180 SBS**.
+---
 
-## Setup
+## RunPod Setup (GPU path — recommended)
+
+### One-time prerequisites
+
+1. **Accept the SVD model license** on HuggingFace (required to download weights):
+   Visit [stabilityai/stable-video-diffusion-img2vid-xt-1-1](https://huggingface.co/stabilityai/stable-video-diffusion-img2vid-xt-1-1) and accept the license form.
+
+2. **Get a HuggingFace token** with Read access:
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) → New token → Read.
+
+### Create the RunPod pod
+
+- **Template:** RunPod PyTorch 2.1 — `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04`
+- **GPU:** RTX 4090 (24 GB) — community cloud ~$0.69/hr
+- **Disk:** 50 GB on `/workspace` (weights ~12 GB + scratch space)
+- **Environment variable:** add `HUGGING_FACE_HUB_TOKEN = <your token>` in pod settings
+
+   Setting the env var makes bootstrap fully unattended — no interactive prompts.
+
+### Bootstrap (run once per pod)
+
+Connect via web terminal or SSH, then:
 
 ```bash
-# Install ffmpeg (one-time)
-winget install Gyan.FFmpeg
-
-# Create venv and install deps
-py -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+cd /workspace
+git clone https://github.com/vpaladino778/ai-vr.git ai-video-generation
+cd ai-video-generation
+bash bootstrap.sh
 ```
 
-## Run
+Bootstrap does everything in order:
+1. HuggingFace auth (uses env var, or prompts if missing)
+2. System packages (ffmpeg, git-lfs)
+3. StereoCrafter git submodule
+4. Python dependencies
+5. Forward-Warp CUDA extension (compiled with nvcc)
+6. Download model weights to `/workspace/models` (~12 GB, skipped if already cached)
 
-Drop your source clip into `source/source_video.mp4`, then:
+Takes ~15 minutes on a fresh pod. Re-running is safe — all steps are idempotent.
+
+### Upload your source video
+
+From your local machine:
+```bash
+runpodctl send source/source_video.mp4
+```
+On the pod, receive it:
+```bash
+runpodctl receive <code>
+mv <filename> /workspace/input.mp4
+```
+
+### Run the pipeline
 
 ```bash
-.venv\Scripts\python scripts\run_pipeline.py
+python scripts/run_pipeline.py --mode gpu --video /workspace/input.mp4
 ```
 
-To resume from a specific stage (e.g. after tuning config):
+Output lands at `/workspace/ai-video-generation/output/vr180_person_sbs.mp4`.
 
+To resume from a specific stage (e.g. after a crash):
 ```bash
-.venv\Scripts\python scripts\run_pipeline.py 05_depth_to_stereo
+python scripts/run_pipeline.py --mode gpu --video /workspace/input.mp4 --start 06_compose_vr180_sbs
 ```
+
+---
 
 ## Pipeline stages
 
-| Script | What it does |
-|---|---|
-| `01_extract_frames.py` | Extracts PNG frames from source video, records FPS |
-| `02_run_matting.py` | Alpha-mattes the person using Robust Video Matting |
-| `03_run_depth.py` | Estimates per-frame depth with Depth Anything V2 |
-| `04_clean_depth.py` | Masks depth to person region, normalizes and smooths |
-| `05_depth_to_stereo.py` | Warps RGB+alpha into left/right eye RGBA frames |
-| `06_compose_vr180_sbs.py` | Places eyes on 1920×1920 canvases, stacks to 3840×1920 |
-| `07_encode.py` | Encodes final HEVC MP4 |
+**GPU path** (StereoCrafter — diffusion-based stereo):
+
+| Stage | Script | What it does |
+|---|---|---|
+| 01 | `01_extract_frames.py` | Extracts PNG frames, records FPS |
+| 02 | `02_run_matting.py` | Alpha-mattes the person (RVM MobileNetV3) |
+| 05 | `05_stereocrafter.py` | Depth splatting + stereo inpainting via StereoCrafter |
+| 06 | `06_compose_vr180_sbs.py` | Inverse equirect projection → 3840×1920 canvas |
+| 07 | `07_encode.py` | HEVC encode (CRF 18, hvc1) |
+
+**CPU path** (local Windows, depth-warp fallback):
+
+| Stage | Script | What it does |
+|---|---|---|
+| 01–04 | — | Extract → Matte → Depth → Clean depth |
+| 05 | `05_depth_to_stereo.py` | Depth-warp stereo (no GPU required) |
+| 06–07 | — | Compose → Encode |
+
+---
 
 ## Tuning
 
-All parameters are in `configs/pipeline_config.yaml`. After editing, re-run only stages 5→7 (skip slow matting/depth):
+All parameters live in `configs/pipeline_config.yaml`.
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `stereocrafter_max_disp` | 20 | Stereo depth intensity (GPU path) |
+| `max_disparity_px` | 26 | Stereo depth intensity (CPU path) |
+| `virtual_fov_v_deg` | 60 | Angular size of person in headset (larger = closer) |
+| `virtual_center_elevation_deg` | -15 | Vertical placement (-15° = natural standing height) |
+
+### Stereo debugging
+
+- **Person appears recessed (wrong eye):** Swap Left/Right in DeoVR, or negate `stereocrafter_max_disp`.
+- **Depth flickering:** Increase `depth_temporal_smooth_alpha` toward 0.8.
+- **Person too small:** Increase `virtual_fov_v_deg`.
+- **Person too high/low:** Adjust `virtual_center_elevation_deg`.
+
+---
+
+## Local CPU setup (Windows)
 
 ```bash
-.venv\Scripts\python scripts\run_pipeline.py 05_depth_to_stereo
+winget install Gyan.FFmpeg
+py -m venv .venv
+.venv\Scripts\pip install -r requirements-cpu.txt
+.venv\Scripts\python scripts\run_pipeline.py --mode cpu
 ```
 
-Key knobs:
+Drop source clip at `source/source_video.mp4` first.
 
-| Parameter | Effect |
-|---|---|
-| `max_disparity_px` | Stereo depth intensity (default 16; reduce if eye strain, increase if flat) |
-| `virtual_fov_v_deg` | How large the person appears (60° = moderate; increase to move closer, decrease to push back) |
-| `virtual_center_elevation_deg` | Vertical angle of the person's center (-15° = slightly below eye level) |
+---
 
 ## Source video requirements
 
-- 5–10 seconds, single subject, centered
+- 5–10 seconds, single subject, centered frame
 - Static camera, no cuts, consistent lighting
-- Simple background (pipeline removes it)
+- Simple or flat background (pipeline removes it)
 - Generated by WAN, Kling, Runway, Luma, etc.

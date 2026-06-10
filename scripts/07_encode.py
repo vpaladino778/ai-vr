@@ -3,6 +3,7 @@
 Wraps the ffmpeg command from the handover doc: libx265, yuv420p, hvc1 tag,
 source FPS, and either CRF (test quality) or fixed-bitrate mode per config.
 """
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -57,6 +58,9 @@ def main():
         log.info(f"Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
         log.info(f"Wrote {output_video}")
+
+        log.info("Removing SBS frame sequence to free disk ...")
+        shutil.rmtree(str(sbs_dir), ignore_errors=True)
 
 
 if __name__ == "__main__":

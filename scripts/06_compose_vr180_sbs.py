@@ -21,6 +21,7 @@ KEY CONFIG PARAMETERS:
                                     a person standing/sitting in front of the viewer)
   virtual_center_azimuth_deg   -- horizontal offset from straight ahead (default 0 = centered)
 """
+import shutil
 from pathlib import Path
 
 import cv2
@@ -164,6 +165,10 @@ def main():
                 log.info(f"Composed {i}/{len(left_frames)} SBS frames")
 
         log.info(f"Wrote {len(left_frames)} SBS frames ({final_width}×{final_height}) to {sbs_dir}")
+
+        log.info("Removing intermediate stereo RGBA frames to free disk ...")
+        shutil.rmtree(left_dir, ignore_errors=True)
+        shutil.rmtree(right_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
